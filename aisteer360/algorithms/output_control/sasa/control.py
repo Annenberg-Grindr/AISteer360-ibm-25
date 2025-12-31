@@ -428,7 +428,6 @@ class SASA(OutputControl):
         input_ids, _, model_kwargs = self.model._prepare_model_inputs(
             inputs, generation_config.bos_token_id, model_kwargs
         )
-        batch_size = input_ids.shape[0]  # todo: unused?
         device = input_ids.device
         self.model._prepare_special_tokens(generation_config, kwargs_has_attention_mask, device=device)
 
