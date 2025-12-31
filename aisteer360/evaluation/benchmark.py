@@ -94,7 +94,19 @@ class Benchmark:
 
             if steering_pipeline:
 
-                # todo: determine if lazy_init needed; raise warnings/errors according
+                # determine if lazy_init needed
+                lazy_init = False
+                for control in steering_pipeline:
+                    # check if MergeKit control is present and configured to return a model
+                    if control.__class__.__name__ == "MergeKit" and getattr(control, "args", None) is not None:
+                        if getattr(control.args, "load_merged", False):
+                            lazy_init = True
+                            break
+                    # check if TRL-based control is present and has its own base model configured
+                    # (checking class name contains "TrainerMixin" as a proxy for TRLMixin subclasses)
+                    if "TrainerMixin" in control.__class__.__name__ and getattr(control, "base_model_name_or_path", None):
+                        lazy_init = True
+                        break
 
                 # build pipeline and steer
                 pipeline = SteeringPipeline(
@@ -102,6 +114,7 @@ class Benchmark:
                     controls=steering_pipeline,
                     device_map=self.device_map,
                     hf_model_kwargs=self.hf_model_kwargs,
+                    lazy_init=lazy_init,
                 )
 
                 # todo: check if steer_kwargs are necessary
