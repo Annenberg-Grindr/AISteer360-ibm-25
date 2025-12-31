@@ -32,6 +32,9 @@ class Benchmark:
             configurations. Outer keys match `control_pipelines` keys,
             inner dicts contain runtime kwargs passed to controls during generation.
             Defaults to None.
+        steer_kwargs (dict[str, dict[str, Any]], optional): Keyword arguments passed to the `steer()` method
+            of specific pipeline configurations. Outer keys match `control_pipelines` keys.
+            Defaults to None.
         hf_model_kwargs (dict, optional): Additional arguments passed to `AutoModelForCausalLM.from_pretrained()`.
             Defaults to {}.
         gen_kwargs (dict, optional): Generation parameters passed to model.generate().
@@ -45,6 +48,7 @@ class Benchmark:
             base_model_name_or_path: str | Path,
             steering_pipelines: dict[str, list[Any]],
             runtime_overrides: dict[str, dict[str, Any]] | None = None,
+            steer_kwargs: dict[str, dict[str, Any]] | None = None,
             hf_model_kwargs: dict | None = None,
             gen_kwargs: dict | None = None,
             device_map: str = "auto"
@@ -53,6 +57,7 @@ class Benchmark:
         self.base_model_name_or_path = base_model_name_or_path
         self.steering_pipelines = steering_pipelines
         self.runtime_overrides = runtime_overrides
+        self.steer_kwargs = steer_kwargs or {}
         self.hf_model_kwargs = hf_model_kwargs or {}
         self.gen_kwargs = gen_kwargs or {}
         self.device_map = device_map
@@ -76,19 +81,25 @@ class Benchmark:
 
             print(f"Running pipeline: {steering_pipeline_name}...", flush=True)
 
-            profile = self._run_pipeline(steering_pipeline)
+            steer_kwargs = self.steer_kwargs.get(steering_pipeline_name, {})
+            profile = self._run_pipeline(steering_pipeline, steer_kwargs)
             profiles[steering_pipeline_name] = profile
 
             print("done.")
 
         return profiles
 
-    def _run_pipeline(self, steering_pipeline: list[Any]) -> dict[str, Any]:
+    def _run_pipeline(
+        self,
+        steering_pipeline: list[Any],
+        steer_kwargs: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Run steering pipeline."""
 
         model = None
         pipeline = None
         tokenizer = None
+        steer_kwargs = steer_kwargs or {}
 
         try:
 
@@ -104,9 +115,7 @@ class Benchmark:
                     hf_model_kwargs=self.hf_model_kwargs,
                 )
 
-                # todo: check if steer_kwargs are necessary
-                # steerer = steerer.steer(**steer_kwargs)
-                pipeline.steer()
+                pipeline.steer(**steer_kwargs)
 
                 tokenizer = pipeline.tokenizer
                 model_or_pipeline = pipeline
