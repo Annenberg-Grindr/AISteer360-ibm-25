@@ -27,7 +27,9 @@ class DeALArgs(BaseArgs):
     )
     reward_func: Callable[[str, list[str], dict], list[float]] = field(
         default=None,
-        metadata={"help": ""},  # todo: write description
+        metadata={
+            "help": "Function that scores generated continuations. Should accept (prompt: str, continuations: list[str], reward_params: dict) and return list[float]."
+        },
     )
 
     # validation
