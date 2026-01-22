@@ -125,14 +125,7 @@ def chat_generate_pipeline(
                 )
 
         # flatten and convert to list of dicts; todo: maintain control names to avoid possible collisions
-        for kwargs in runtime_kwargs.values():
-            for var, arg in kwargs.items():
-                if var in runtime_kwargs_flat:
-                    raise ValueError(
-                        f"Duplicate runtime_kwargs for: {var!r}; ensure controls have distinct variables."
-                    )
-                runtime_kwargs_flat[var] = arg
-        runtime_kwargs_flat = _runtime_kwargs_to_list(runtime_kwargs_flat)
+        runtime_kwargs_flat = _runtime_kwargs_to_list(runtime_kwargs)
 
     # Need to check for empty runtime_kwargs_flat since we may define runtime_overrides
     # for a subset of steering methods, but the current method may not have any overrides.

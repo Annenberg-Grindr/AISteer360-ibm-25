@@ -3,7 +3,7 @@ Core steering pipeline for composing and applying multiple LLM control methods.
 """
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Sequence
+from typing import Sequence, Any
 
 import torch
 import torch.nn as nn
@@ -218,7 +218,7 @@ class SteeringPipeline:
 
         # input control
         adapter = self.input_control.get_prompt_adapter()
-        steered_input_ids = adapter(input_ids, runtime_kwargs)
+        steered_input_ids = adapter(input_ids, self._resolve_runtime_kwargs(self.input_control, runtime_kwargs))
         if isinstance(steered_input_ids, list):
             steered_input_ids = torch.tensor(steered_input_ids, dtype=torch.long)
         if steered_input_ids.ndim == 1:
@@ -244,7 +244,7 @@ class SteeringPipeline:
         attention_mask = attention_mask.to(dtype=steered_input_ids.dtype, device=steered_input_ids.device)
 
         # state control
-        hooks = self.state_control.get_hooks(steered_input_ids, runtime_kwargs, **gen_kwargs)
+        hooks = self.state_control.get_hooks(steered_input_ids, self._resolve_runtime_kwargs(self.state_control, runtime_kwargs), **gen_kwargs)
         self.state_control.set_hooks(hooks)
         self.state_control._model_ref = self.model
 
@@ -254,7 +254,7 @@ class SteeringPipeline:
             output_ids = self.output_control.generate(
                 input_ids=steered_input_ids,
                 attention_mask=attention_mask,
-                runtime_kwargs=runtime_kwargs,
+                runtime_kwargs=self._resolve_runtime_kwargs(self.output_control, runtime_kwargs),
                 model=self.model,
                 **gen_kwargs
             )
@@ -263,6 +263,33 @@ class SteeringPipeline:
             output_ids = output_ids[:, steered_input_ids.size(1):]
 
         return output_ids
+
+    def _resolve_runtime_kwargs(self, control: Any, runtime_kwargs: dict | None) -> dict:
+        """Resolve runtime_kwargs for a specific control.
+
+        If runtime_kwargs contains a key matching the control's class name, we merge the dictionary
+        at that key into the top-level kwargs. This allows for both global arguments (at top level)
+        and control-specific overrides (scoped by control name).
+
+        Args:
+            control: The control instance to resolve kwargs for.
+            runtime_kwargs: The runtime arguments dictionary.
+
+        Returns:
+            A new dictionary containing the resolved arguments.
+        """
+        if runtime_kwargs is None:
+            return {}
+
+        control_name = control.__class__.__name__
+
+        # If control-specific overrides exist, merge them into a copy of runtime_kwargs
+        if control_name in runtime_kwargs and isinstance(runtime_kwargs[control_name], dict):
+            resolved = runtime_kwargs.copy()
+            resolved.update(runtime_kwargs[control_name])
+            return resolved
+
+        return runtime_kwargs
 
     def generate_text(self, *args, **kwargs) -> str | list[str]:
         """Generate text and decode to string(s).
